@@ -1,0 +1,44 @@
+name: Bug Report
+description: Something isn't working
+labels: [bug]
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: Clear description of the bug.
+      placeholder: "teleping.success() sends but the message formatting is broken..."
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: How to reproduce
+      description: Minimal code to trigger the bug.
+      render: typescript
+      placeholder: |
+        import { teleping } from 'teleping'
+        teleping.success('test', { key: 'value' })
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: What should have happened instead.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: teleping version
+      placeholder: "0.1.0"
+    validations:
+      required: true
+  - type: input
+    id: node
+    attributes:
+      label: Node.js version
+      placeholder: "20.11.0"
+    validations:
+      required: true
