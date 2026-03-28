@@ -14,7 +14,7 @@
   "module": "./dist/index.mjs",
   "types": "./dist/index.d.ts",
   "bin": {
-    "teleping": "./dist/cli.mjs"
+    "teleping": "./dist/cli.js"
   },
   "files": [
     "dist"
