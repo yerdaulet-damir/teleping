@@ -27,11 +27,20 @@
   },
   "keywords": [
     "telegram",
+    "telegram-bot",
     "notifications",
     "alerts",
     "monitoring",
-    "logging",
-    "solo-dev"
+    "nextjs",
+    "vercel",
+    "webhook",
+    "typescript",
+    "zero-dependencies",
+    "saas",
+    "solo-developer",
+    "vibe-coding",
+    "stripe-webhook",
+    "error-tracking"
   ],
   "license": "MIT",
   "devDependencies": {
