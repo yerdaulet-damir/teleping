@@ -12,8 +12,8 @@ export function buildCardPayload(opts: CardOptions, ts: number): BuilderPayload 
     level,
     label: opts.title,
     timestamp: ts,
-    data: Object.keys(data).length > 0 ? data : undefined,
-    buttons: opts.actions,
+    ...(Object.keys(data).length > 0 && { data }),
+    ...(opts.actions && { buttons: opts.actions }),
   }
 }
 
