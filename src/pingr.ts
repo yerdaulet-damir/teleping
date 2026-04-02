@@ -1,13 +1,27 @@
+import { MessageBuilder } from './builder.js'
 import { BatchManager } from './batch.js'
-import { formatBatch, formatDigest, formatMessage } from './format.js'
+import { buildCardPayload, buildChecklistPayload, buildProgressPayload, buildTablePayload } from './components.js'
+import { formatBatch, formatDigest, formatMessage, resolveButtonPresets, type FormatOptions } from './format.js'
 import { sendMessage } from './send.js'
-import type { DigestStats, Level, Message, TelepingConfig } from './types.js'
+import { DEFAULT_THEME, THEMES } from './themes.js'
+import type {
+  BuilderPayload,
+  ButtonSpec,
+  CardOptions,
+  ChecklistItem,
+  DigestStats,
+  Level,
+  Message,
+  ProgressOptions,
+  TableRow,
+  TelepingConfig,
+} from './types.js'
 
 // ─── Default config ───────────────────────────────────────────────────────────
 
-const DEFAULT_BATCH_WINDOW_MS = 5 * 60 * 1000 // 5 minutes
+const DEFAULT_BATCH_WINDOW_MS = 5 * 60 * 1000
 
-// ─── Teleping class ─────────────────────────────────────────────────────────
+// ─── Teleping class ───────────────────────────────────────────────────────────
 
 export class Teleping {
   private config: TelepingConfig | null = null
@@ -39,22 +53,34 @@ export class Teleping {
     }
   }
 
-  // ─── Public API ───────────────────────────────────────────────────────────
+  // ─── Public API (overloads) ────────────────────────────────────────────────
 
-  log(label: string, data?: Record<string, unknown>): void {
-    this.emit({ level: 'log', label, data, timestamp: Date.now() })
+  log(label: string, data: Record<string, unknown>): void
+  log(label: string): MessageBuilder
+  log(label: string, data?: Record<string, unknown>): MessageBuilder | void {
+    if (data !== undefined) { this.emit({ level: 'log', label, data, timestamp: Date.now() }); return }
+    return this.makeBuilder('log', label)
   }
 
-  success(label: string, data?: Record<string, unknown>): void {
-    this.emit({ level: 'success', label, data, timestamp: Date.now() })
+  success(label: string, data: Record<string, unknown>): void
+  success(label: string): MessageBuilder
+  success(label: string, data?: Record<string, unknown>): MessageBuilder | void {
+    if (data !== undefined) { this.emit({ level: 'success', label, data, timestamp: Date.now() }); return }
+    return this.makeBuilder('success', label)
   }
 
-  warn(label: string, data?: Record<string, unknown>): void {
-    this.emit({ level: 'warn', label, data, timestamp: Date.now() })
+  warn(label: string, data: Record<string, unknown>): void
+  warn(label: string): MessageBuilder
+  warn(label: string, data?: Record<string, unknown>): MessageBuilder | void {
+    if (data !== undefined) { this.emit({ level: 'warn', label, data, timestamp: Date.now() }); return }
+    return this.makeBuilder('warn', label)
   }
 
-  error(label: string, data?: Record<string, unknown>): void {
-    this.emit({ level: 'error', label, data, timestamp: Date.now() })
+  error(label: string, data: Record<string, unknown>): void
+  error(label: string): MessageBuilder
+  error(label: string, data?: Record<string, unknown>): MessageBuilder | void {
+    if (data !== undefined) { this.emit({ level: 'error', label, data, timestamp: Date.now() }); return }
+    return this.makeBuilder('error', label)
   }
 
   metric(label: string, value: number): void {
@@ -74,25 +100,144 @@ export class Teleping {
     this.digest_ = freshDigest()
   }
 
+  // ─── Component methods ────────────────────────────────────────────────────
+
+  card(opts: CardOptions): void {
+    const cfg = this.resolve()
+    if (!cfg) return
+    const payload = buildCardPayload(opts, Date.now())
+    this.emitRich(payload, true)
+  }
+
+  progress(label: string, opts: ProgressOptions): void {
+    const cfg = this.resolve()
+    if (!cfg) return
+    const payload = buildProgressPayload(label, opts, Date.now())
+    this.emitRich(payload, true)
+  }
+
+  table(title: string, rows: TableRow[]): void {
+    const cfg = this.resolve()
+    if (!cfg) return
+    const payload = buildTablePayload(title, rows, Date.now())
+    this.emitRich(payload, true)
+  }
+
+  checklist(title: string, items: ChecklistItem[]): void {
+    const cfg = this.resolve()
+    if (!cfg) return
+    const payload = buildChecklistPayload(title, items, Date.now())
+    this.emitRich(payload, true)
+  }
+
   // ─── Internal ─────────────────────────────────────────────────────────────
+
+  private makeBuilder(level: Level, label: string): MessageBuilder {
+    // Eagerly resolve config so console.warn fires on missing credentials
+    this.resolve()
+    // Eagerly track digest (so digest() counts this event even without .send())
+    this.trackDigest({ level, label, timestamp: Date.now() })
+    return new MessageBuilder(level, label, (p) => this.emitRich(p, false))
+  }
 
   private emit(msg: Message): void {
     const cfg = this.resolve()
     if (!cfg) return
 
-    // Track for digest
     this.trackDigest(msg)
-
-    // Quiet hours — suppress non-critical
     if (msg.level !== 'error' && this.isQuietHour(cfg)) return
 
-    // Batching
     const action = this.batchManager.add(msg)
     if (action === 'batched') return
 
-    // Send immediately
-    const { text, buttons } = formatMessage(msg, cfg.app)
-    sendMessage({ token: cfg.token, chatId: cfg.chatId, text, buttons }).catch(this.logError)
+    const { text, buttons } = formatMessage(msg, cfg.app, this.buildFormatOpts(msg.level, msg))
+    const route = this.resolveRoute(msg.level)
+    const emitArgs: Parameters<typeof sendMessage>[0] = { token: cfg.token, chatId: route.chatId, text, buttons }
+    if (route.threadId !== undefined) emitArgs.threadId = route.threadId
+    sendMessage(emitArgs).catch(this.logError)
+  }
+
+  /**
+   * Core rich-message dispatcher. Used by builder .send() and component methods.
+   * @param trackDigest - true for component methods (not yet tracked), false for builder (already tracked eagerly)
+   */
+  private emitRich(payload: BuilderPayload, trackDigest: boolean): void {
+    const cfg = this.config
+    if (!cfg) return
+
+    const msg: Message = {
+      level: payload.level,
+      label: payload.label,
+      data: payload.data,
+      value: payload.value,
+      timestamp: payload.timestamp,
+    }
+
+    if (trackDigest) this.trackDigest(msg)
+    if (payload.level !== 'error' && this.isQuietHour(cfg)) return
+
+    const action = this.batchManager.add(msg)
+    if (action === 'batched') return
+
+    const configButtons: ButtonSpec[] = cfg.buttons?.[payload.level] ?? cfg.buttons?.['default'] ?? []
+    const allSpecs: ButtonSpec[] = [...configButtons, ...(payload.buttons ?? [])]
+    const stack = typeof payload.data?.['stack'] === 'string' ? payload.data['stack'] : undefined
+
+    const opts: FormatOptions = {
+      theme: cfg.theme ? THEMES[cfg.theme] : DEFAULT_THEME,
+      ...(cfg.separator !== undefined && { separator: cfg.separator }),
+      ...(cfg.emoji !== undefined && { customEmoji: cfg.emoji }),
+      ...(cfg.footer !== undefined && { footer: cfg.footer }),
+      ...(payload.expandData !== undefined && { expandData: payload.expandData }),
+      ...(payload.codeBlock !== undefined && { codeBlock: payload.codeBlock }),
+      ...(payload.spoilerFields !== undefined && { spoilerFields: payload.spoilerFields }),
+      ...(allSpecs.length > 0 && {
+        overrideButtons: [resolveButtonPresets(allSpecs, {
+          label: payload.label,
+          ...(stack !== undefined && { stack }),
+          ...(payload.data !== undefined && { data: payload.data }),
+        })],
+      }),
+    }
+
+    const { text, buttons } = formatMessage(msg, cfg.app, opts)
+    const route = this.resolveRoute(payload.level)
+    const routeArgs: Parameters<typeof sendMessage>[0] = { token: cfg.token, chatId: route.chatId, text, buttons }
+    if (route.threadId !== undefined) routeArgs.threadId = route.threadId
+    sendMessage(routeArgs).catch(this.logError)
+  }
+
+  private buildFormatOpts(level: Level, msg: Message): FormatOptions | undefined {
+    const cfg = this.config
+    if (!cfg) return undefined
+
+    const configButtons: ButtonSpec[] = cfg.buttons?.[level] ?? cfg.buttons?.['default'] ?? []
+    const hasRich = cfg.theme || cfg.separator || cfg.emoji || cfg.footer || configButtons.length > 0
+    if (!hasRich) return undefined
+
+    const stack = typeof msg.data?.['stack'] === 'string' ? msg.data['stack'] : undefined
+    return {
+      theme: cfg.theme ? THEMES[cfg.theme] : DEFAULT_THEME,
+      ...(cfg.separator !== undefined && { separator: cfg.separator }),
+      ...(cfg.emoji !== undefined && { customEmoji: cfg.emoji }),
+      ...(cfg.footer !== undefined && { footer: cfg.footer }),
+      ...(configButtons.length > 0 && {
+        overrideButtons: [resolveButtonPresets(configButtons, {
+          label: msg.label,
+          ...(stack !== undefined && { stack }),
+          ...(msg.data !== undefined && { data: msg.data }),
+        })],
+      }),
+    }
+  }
+
+  private resolveRoute(level: Level): { chatId: string; threadId?: string } {
+    const cfg = this.config
+    if (!cfg) return { chatId: '' }
+    const route = cfg.routes?.[level]
+    const result: { chatId: string; threadId?: string } = { chatId: route?.chatId ?? cfg.chatId }
+    if (route?.threadId !== undefined) result.threadId = route.threadId
+    return result
   }
 
   private sendBatchSummary(label: string, count: number, level: Level): void {
@@ -102,7 +247,6 @@ export class Teleping {
     sendMessage({ token: cfg.token, chatId: cfg.chatId, text }).catch(this.logError)
   }
 
-  /** Lazy resolve config from env. Warn once if missing. */
   private resolve(): TelepingConfig | null {
     if (this.resolved) return this.config
 
@@ -140,7 +284,6 @@ export class Teleping {
     }
 
     const { quietStart, quietEnd } = cfg
-    // Handle midnight-crossing ranges like 23:00 - 07:00
     if (quietStart > quietEnd) {
       return currentHour >= quietStart || currentHour < quietEnd
     }

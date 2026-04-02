@@ -1,6 +1,6 @@
 {
   "name": "teleping",
-  "version": "0.1.0",
+  "version": "0.2.1",
   "description": "Beautiful Telegram alerts for solo builders. shadcn/ui for backend notifications.",
   "type": "module",
   "exports": {
@@ -27,11 +27,20 @@
   },
   "keywords": [
     "telegram",
+    "telegram-bot",
     "notifications",
     "alerts",
     "monitoring",
-    "logging",
-    "solo-dev"
+    "nextjs",
+    "vercel",
+    "webhook",
+    "typescript",
+    "zero-dependencies",
+    "saas",
+    "solo-developer",
+    "vibe-coding",
+    "stripe-webhook",
+    "error-tracking"
   ],
   "license": "MIT",
   "devDependencies": {
