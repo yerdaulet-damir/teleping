@@ -41,7 +41,7 @@ describe('Teleping', () => {
       vi.stubEnv('TELEPING_TOKEN', 'tok123')
       vi.stubEnv('TELEPING_CHAT', 'chat456')
       p = new Teleping()
-      p.log('test')
+      p.log('test').send()
       expect(fetchSpy).toHaveBeenCalledTimes(1)
       const url = fetchSpy.mock.calls[0]![0] as string
       expect(url).toContain('bot' + 'tok123')
@@ -49,7 +49,7 @@ describe('Teleping', () => {
 
     it('init() overrides env vars', () => {
       p.init({ token: 'manual_tok', chatId: 'manual_chat' })
-      p.log('test')
+      p.log('test').send()
       expect(fetchSpy).toHaveBeenCalledTimes(1)
       const url = fetchSpy.mock.calls[0]![0] as string
       expect(url).toContain('botmanual_tok')
@@ -57,8 +57,8 @@ describe('Teleping', () => {
 
     it('no-ops silently when no config (warns once)', () => {
       const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
-      p.log('test1')
-      p.log('test2')
+      p.log('test1').send()
+      p.log('test2').send()
       expect(fetchSpy).not.toHaveBeenCalled()
       expect(warnSpy).toHaveBeenCalledTimes(1)
       warnSpy.mockRestore()
@@ -73,24 +73,24 @@ describe('Teleping', () => {
     })
 
     it('log sends with info emoji', () => {
-      p.log('info msg')
+      p.log('info msg').send()
       expect(lastCallText()).toContain('ℹ️')
       expect(lastCallText()).toContain('info msg')
     })
 
     it('success sends with check emoji', () => {
-      p.success('payment received')
+      p.success('payment received').send()
       expect(lastCallText()).toContain('✅')
       expect(lastCallText()).toContain('payment received')
     })
 
     it('warn sends with warning emoji', () => {
-      p.warn('rate limit')
+      p.warn('rate limit').send()
       expect(lastCallText()).toContain('⚠️')
     })
 
     it('error sends with red circle emoji', () => {
-      p.error('crash')
+      p.error('crash').send()
       expect(lastCallText()).toContain('🔴')
     })
 
@@ -109,12 +109,12 @@ describe('Teleping', () => {
 
     it('includes app name in footer', () => {
       p.init({ token: 'tok', chatId: 'chat', app: 'myapp.com' })
-      p.log('test')
+      p.log('test').send()
       expect(lastCallText()).toContain('myapp.com')
     })
 
     it('includes sent via teleping footer', () => {
-      p.log('test')
+      p.log('test').send()
       expect(lastCallText()).toContain('sent via teleping')
     })
   })
@@ -141,21 +141,21 @@ describe('Teleping', () => {
     })
 
     it('first event sends immediately', () => {
-      p.success('user signup')
+      p.success('user signup').send()
       expect(fetchSpy).toHaveBeenCalledTimes(1)
     })
 
     it('duplicate events within window are batched', () => {
-      p.success('user signup')
-      p.success('user signup')
-      p.success('user signup')
+      p.success('user signup').send()
+      p.success('user signup').send()
+      p.success('user signup').send()
       expect(fetchSpy).toHaveBeenCalledTimes(1)
     })
 
     it('errors are never batched', () => {
-      p.error('crash')
-      p.error('crash')
-      p.error('crash')
+      p.error('crash').send()
+      p.error('crash').send()
+      p.error('crash').send()
       expect(fetchSpy).toHaveBeenCalledTimes(3)
     })
   })
@@ -168,9 +168,9 @@ describe('Teleping', () => {
     })
 
     it('sends accumulated stats', async () => {
-      p.log('a')
-      p.success('b')
-      p.error('c')
+      p.log('a').send()
+      p.success('b').send()
+      p.error('c').send()
       p.metric('users', 100)
       fetchSpy.mockClear()
 
@@ -188,7 +188,7 @@ describe('Teleping', () => {
     })
 
     it('resets after sending', async () => {
-      p.log('a')
+      p.log('a').send()
       await p.digest()
       fetchSpy.mockClear()
       await p.digest()
@@ -207,9 +207,9 @@ describe('Teleping', () => {
         quietStart: currentHour,
         quietEnd: (currentHour + 2) % 24,
       })
-      p.log('quiet test')
-      p.success('quiet success')
-      p.warn('quiet warn')
+      p.log('quiet test').send()
+      p.success('quiet success').send()
+      p.warn('quiet warn').send()
       expect(fetchSpy).not.toHaveBeenCalled()
     })
 
@@ -221,7 +221,7 @@ describe('Teleping', () => {
         quietStart: currentHour,
         quietEnd: (currentHour + 2) % 24,
       })
-      p.error('critical crash')
+      p.error('critical crash').send()
       expect(fetchSpy).toHaveBeenCalledTimes(1)
     })
   })

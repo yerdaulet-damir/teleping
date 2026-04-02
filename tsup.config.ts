@@ -7,6 +7,9 @@ export default defineConfig([
     dts: true,
     clean: true,
     outDir: 'dist',
+    outExtension({ format }) {
+      return { js: format === 'esm' ? '.mjs' : '.cjs' }
+    },
   },
   {
     entry: { cli: 'src/cli.ts' },
