@@ -1,6 +1,6 @@
 {
   "name": "teleping",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Beautiful Telegram alerts for solo builders. shadcn/ui for backend notifications.",
   "type": "module",
   "exports": {
