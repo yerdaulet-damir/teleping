@@ -22,10 +22,11 @@ telegram alerts for solo builders — 1 import, 5 functions, zero deps.
 
 [![teleping](https://coolreadme.xyz/api/docs-card?pkg=teleping&version=0.2.1&desc=Telegram+alerts+for+vibe+coders.+Know+what+broke+and+what+shipped+%E2%80%94+the+moment+it+happens.&install=npm+install+teleping&theme=langchain)](https://npmjs.com/package/teleping)
 
+
+
 </div>
 
 ---
-
 ```typescript
 // your stripe webhook just broke at 2am.
 // you're asleep. teleping is not.
@@ -94,6 +95,7 @@ npx teleping init   # creates .env with TELEPING_TOKEN + TELEPING_CHAT
 npx teleping test   # sends a test message to verify
 ```
 
+![npm Package](https://coolreadme.xyz/api/npm-card?pkg=teleping)
 ## Usage
 
 ```typescript
